@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 from bm25_pt import BM25  # Changed to use bm25_pt library
 import torch
+import pandas as pd
 import numpy as np
 import tqdm
 
@@ -28,6 +29,13 @@ def save_results_to_json(scores, directory, filename):
     full_path = os.path.join(directory, filename)
     with open(full_path, 'w', encoding='utf-8') as f:
         json.dump(scores, f, ensure_ascii=False, indent=4)
+
+def save_results_to_csv(scores, directory, filename):
+    if not os.path.exists(directory):
+        os.makedirs(directory, exist_ok=True)
+    full_path = os.path.join(directory, filename)
+    df = pd.DataFrame(scores)
+    df.to_csv(full_path, index=False)
 
 def sample_docs(docs, window_size=16):
     docs = np.random.choice(docs, window_size)
@@ -54,13 +62,15 @@ def calculate_bm25_all_pairs(data_preprocessed, batch_size, topk):
     top_values, top_indices = torch.topk(doc_scores, topk, dim=1)
     top_values, top_indices = top_values.tolist(), top_indices.tolist()
 
-    for query_id in range(len(top_values)):
-        data_structure = {
-            "query_author_id": authors[query_id],
-            "top_n_bm25_scores": top_values[query_id],
-            "target_author_ids": [authors[target_id] for target_id in top_indices[query_id]],
-        }
-        all_results.append(data_structure)
+    # for query_id in range(len(top_values)):
+    #     data_structure = {
+    #         "query_author_id": authors[query_id],
+    #         "top_n_bm25_scores": top_values[query_id],
+    #         "target_author_ids": [authors[target_id] for target_id in top_indices[query_id]],
+    #     }
+    #     all_results.append(data_structure)
+
+    all_results = top_indices
 
     current_time = time.time()
     print(f"Total running time: {current_time - start_time} seconds")
@@ -89,8 +99,8 @@ def main():
     scores = calculate_bm25_all_pairs(data_preprocessed, batch_size, topk)
 
     directory = './reddit'
-    filename = f'bm25_result_{num_authors}-authors.json'
-    save_results_to_json(scores, directory, filename)
+    filename = f'bm25_result_{num_authors}-authors.csv'
+    save_results_to_csv(scores, directory, filename)
 
 if __name__ == "__main__":
     main()
