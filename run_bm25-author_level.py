@@ -5,14 +5,21 @@ from collections import defaultdict
 from bm25_pt import BM25  # Changed to use bm25_pt library
 import torch
 import numpy as np
+import tqdm
 
 # Load data from JSON file
-def load_data(file_path):
+def load_data(file_path, num_authors):
     data = []
+    pbar = tqdm.auto.tqdm("load_data", colour="blue", leave=False, total=num_authors)
     with open(file_path, 'r', encoding='utf-8') as file:
-        # for line in file:
-        #     data.append(json.loads(line))
-        data = json.load(file)
+        count = 0
+        for line in file:
+            data.append(json.loads(line))
+            count += 1
+            pbar.update(1)
+            if count == num_authors:
+                break
+        # data = json.load(file)
     return data
 
 def save_results_to_json(scores, directory, filename):
@@ -26,7 +33,7 @@ def sample_docs(docs, window_size=16):
     docs = np.random.choice(docs, window_size)
     return docs
 
-def calculate_bm25_all_pairs(data_preprocessed, topk):
+def calculate_bm25_all_pairs(data_preprocessed, batch_size, topk):
 
     all_results = []
     authors = list(data_preprocessed.keys())
@@ -41,7 +48,7 @@ def calculate_bm25_all_pairs(data_preprocessed, topk):
     bm25 = BM25(device='cuda')
     bm25.index(texts)
     print("indexing done on queries")
-    doc_scores = bm25.score_batch(texts, batch_size=128)
+    doc_scores = bm25.score_batch(texts, batch_size)
     print("bm25 done on targets")
 
     top_values, top_indices = torch.topk(doc_scores, topk, dim=1)
@@ -61,8 +68,11 @@ def calculate_bm25_all_pairs(data_preprocessed, topk):
     return all_results
 
 def main():
-    file_path = 'reddit/reddit-train_5000-authors.json'  # Update with your actual path
-    data = load_data(file_path)
+    num_authors = 50000
+    batch_size = 4
+    topk = 512
+    file_path = '/share/rush/authorship/data/all_pii/all_data_pii_removed.jsonl'  # Update with your actual path
+    data = load_data(file_path, num_authors)
     data_preprocessed = {}
     document_counts = defaultdict(int)
 
@@ -76,10 +86,10 @@ def main():
         document_counts[author_id] += len(entry['syms'])
         data_preprocessed[author_id] = entry['syms']
 
-    scores = calculate_bm25_all_pairs(data_preprocessed, 512)
+    scores = calculate_bm25_all_pairs(data_preprocessed, batch_size, topk)
 
     directory = './reddit'
-    filename = 'bm25_result_5000-authors.json'
+    filename = f'bm25_result_{num_authors}-authors.json'
     save_results_to_json(scores, directory, filename)
 
 if __name__ == "__main__":
