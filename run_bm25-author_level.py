@@ -78,10 +78,10 @@ def calculate_bm25_all_pairs(data_preprocessed, batch_size, topk):
     return all_results
 
 def main():
-    num_authors = 50000
-    batch_size = 4
+    num_authors = 160000
+    batch_size = 32
     topk = 512
-    file_path = '/share/rush/authorship/data/all_pii/all_data_pii_removed.jsonl'  # Update with your actual path
+    file_path = '/share/rush/authorship/data/amazon_pii/train.jsonl'  # Update with your actual path
     data = load_data(file_path, num_authors)
     data_preprocessed = {}
     document_counts = defaultdict(int)
@@ -98,7 +98,7 @@ def main():
 
     scores = calculate_bm25_all_pairs(data_preprocessed, batch_size, topk)
 
-    directory = './reddit'
+    directory = './amazon'
     filename = f'bm25_result_{num_authors}-authors.csv'
     save_results_to_csv(scores, directory, filename)
 
