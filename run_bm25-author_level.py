@@ -41,7 +41,7 @@ def sample_docs(docs, window_size=16):
     docs = np.random.choice(docs, window_size)
     return docs
 
-def calculate_bm25_all_pairs(data_preprocessed, batch_size, topk):
+def calculate_bm25_all_pairs(data_preprocessed, batch_size, topk, mix_cpu_gpu=True):
 
     all_results = []
     authors = list(data_preprocessed.keys())
@@ -56,11 +56,27 @@ def calculate_bm25_all_pairs(data_preprocessed, batch_size, topk):
     bm25 = BM25(device='cuda')
     bm25.index(texts)
     print("indexing done on queries")
-    doc_scores = bm25.score_batch(texts, batch_size)
-    print("bm25 done on targets")
+    if mix_cpu_gpu:
+        top_values, top_indices = [], []
+        queries = texts
+        i = 0
+        batch_size = batch_size or len(queries)
+        pbar = tqdm.auto.tqdm("score_batch", colour="blue", leave=False, total=len(queries))
+        while i < len(queries):
+            queries_ids = bm25.tokenizer_fn(queries[i:i+batch_size])
+            batch_scores = super(BM25, bm25).score_batch(queries=queries_ids, batch_size=batch_size).cpu()
+            batch_top_values, batch_top_indices = torch.topk(batch_scores, topk, dim=1)
+            # top_values.extend(batch_top_values.tolist())
+            top_indices.extend(batch_top_indices.tolist())
+            pbar.update(batch_size)
+            i += batch_size
+        print("bm25 done on targets")
+    else:
+        doc_scores = bm25.score_batch(texts, batch_size)
+        print("bm25 done on targets")
 
-    top_values, top_indices = torch.topk(doc_scores, topk, dim=1)
-    top_values, top_indices = top_values.tolist(), top_indices.tolist()
+        top_values, top_indices = torch.topk(doc_scores, topk, dim=1)
+        top_values, top_indices = top_values.tolist(), top_indices.tolist()
 
     # for query_id in range(len(top_values)):
     #     data_structure = {
@@ -78,10 +94,10 @@ def calculate_bm25_all_pairs(data_preprocessed, batch_size, topk):
     return all_results
 
 def main():
-    num_authors = 160000
-    batch_size = 32
+    num_authors = 1280000
+    batch_size = 1
     topk = 512
-    file_path = '/share/rush/authorship/data/amazon_pii/train.jsonl'  # Update with your actual path
+    file_path = '/share/rush/authorship/data/all_pii/all_data_pii_removed.jsonl'  # Update with your actual path
     data = load_data(file_path, num_authors)
     data_preprocessed = {}
     document_counts = defaultdict(int)
@@ -98,8 +114,8 @@ def main():
 
     scores = calculate_bm25_all_pairs(data_preprocessed, batch_size, topk)
 
-    directory = './amazon'
-    filename = f'bm25_result_{num_authors}-authors.csv'
+    directory = './reddit'
+    filename = f'bm25_result_{num_authors}-authors_batched.csv'
     save_results_to_csv(scores, directory, filename)
 
 if __name__ == "__main__":
